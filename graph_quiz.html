@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>เกมหาจุดบนกราฟ</title>
+<style>
+  body { font-family: sans-serif; margin: 20px; }
+  canvas { border: 1px solid #333; background: #f9f9f9; display: block; margin-top: 10px; }
+  .hidden { display: none; }
+  input { margin: 5px; padding: 5px; }
+  button { margin-top: 10px; padding: 6px 12px; }
+  table { margin-top: 20px; border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+  #timer { font-weight: bold; color: red; }
+</style>
+</head>
+<body>
+
+<h2>แบบทดสอบหาจุดและจตุภาค</h2>
+
+<div id="userForm">
+  <p>กรุณากรอกข้อมูลผู้เรียน</p>
+  <input type="text" id="fname" placeholder="ชื่อ">
+  <input type="text" id="lname" placeholder="สกุล">
+  <input type="text" id="class" placeholder="ชั้น">
+  <input type="text" id="number" placeholder="เลขที่">
+  <button onclick="startGame()">เริ่มเกม</button>
+</div>
+
+<div id="gameArea" class="hidden">
+  <canvas id="graph" width="400" height="400"></canvas>
+  <p>ตอบพิกัดและจตุภาคของจุด (เวลาคงเหลือ: <span id="timer">30</span> วินาที)</p>
+  <label>X: <input type="number" id="inputX" /></label>
+  <label>Y: <input type="number" id="inputY" /></label>
+  <label>จตุภาค (1-4): <input type="number" id="inputQuadrant" /></label><br/>
+  <button onclick="submitAnswer()">ส่งคำตอบ</button>
+  <p id="feedback"></p>
+  <p id="scoreDisplay">คะแนน: 0</p>
+</div>
+
+<h3>ผลการเข้าใช้งาน</h3>
+<table id="resultTable">
+  <thead>
+    <tr>
+      <th>ชื่อ</th><th>สกุล</th><th>ชั้น</th><th>เลขที่</th><th>คะแนน</th><th>เวลารวม (วินาที)</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const canvas = document.getElementById('graph');
+const ctx = canvas.getContext('2d');
+const timerDisplay = document.getElementById('timer');
+const feedback = document.getElementById('feedback');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const resultTable = document.getElementById('resultTable').querySelector('tbody');
+
+let currentPoint = null;
+let score = 0;
+let timeLeft = 30;
+let timerId = null;
+let totalTime = 0;
+let questionCount = 5; // จำนวนข้อที่ต้องการสุ่ม
+let currentQuestion = 0;
+
+function drawGraph() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#000';
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height/2);
+  ctx.lineTo(canvas.width, canvas.height/2);
+  ctx.moveTo(canvas.width/2, 0);
+  ctx.lineTo(canvas.width/2, canvas.height);
+  ctx.stroke();
+
+  // grid
+  ctx.strokeStyle = '#ccc';
+  for (let i = 0; i <= 20; i++) {
+    let pos = i * 20;
+    ctx.beginPath();
+    ctx.moveTo(pos, 0);
+    ctx.lineTo(pos, canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, pos);
+    ctx.lineTo(canvas.width, pos);
+    ctx.stroke();
+  }
+}
+
+function convertToCanvasCoords(x, y) {
+  return {
+    canvasX: canvas.width / 2 + x * 20,
+    canvasY: canvas.height / 2 - y * 20
+  };
+}
+
+function drawPoint(x, y) {
+  const { canvasX, canvasY } = convertToCanvasCoords(x, y);
+  ctx.fillStyle = 'red';
+  ctx.beginPath();
+  ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+function determineQuadrant(x, y) {
+  if (x > 0 && y > 0) return 1;
+  if (x < 0 && y > 0) return 2;
+  if (x < 0 && y < 0) return 3;
+  if (x > 0 && y < 0) return 4;
+  return 0;
+}
+
+function generateRandomPoint() {
+  let x, y;
+  do {
+    x = Math.floor(Math.random() * 21) - 10;
+    y = Math.floor(Math.random() * 21) - 10;
+  } while ((x === 0 || y === 0));
+  return {x, y};
+}
+
+function startTimer() {
+  timeLeft = 30;
+  timerDisplay.textContent = timeLeft;
+  timerId = setInterval(() => {
+    timeLeft--;
+    timerDisplay.textContent = timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(timerId);
+      feedback.textContent = "หมดเวลา!";
+      setTimeout(nextQuestion, 1000);
+    }
+  }, 1000);
+}
+
+function nextQuestion() {
+  clearInterval(timerId);
+  currentQuestion++;
+
+  if (currentQuestion > questionCount) {
+    endGame();
+    return;
+  }
+
+  feedback.textContent = '';
+  document.getElementById('inputX').value = '';
+  document.getElementById('inputY').value = '';
+  document.getElementById('inputQuadrant').value = '';
+
+  currentPoint = generateRandomPoint();
+  drawGraph();
+  drawPoint(currentPoint.x, currentPoint.y);
+  startTimer();
+}
+
+function submitAnswer() {
+  clearInterval(timerId);
+  const x = parseInt(document.getElementById('inputX').value);
+  const y = parseInt(document.getElementById('inputY').value);
+  const q = parseInt(document.getElementById('inputQuadrant').value);
+
+  const correctQ = determineQuadrant(currentPoint.x, currentPoint.y);
+
+  if (x === currentPoint.x && y === currentPoint.y && q === correctQ) {
+    score++;
+    feedback.textContent = "✅ ตอบถูก!";
+  } else {
+    feedback.textContent = `❌ ตอบผิด! จุดจริงคือ (${currentPoint.x}, ${currentPoint.y}) จตุภาค ${correctQ}`;
+  }
+
+  totalTime += (30 - timeLeft);
+  scoreDisplay.textContent = `คะแนน: ${score}`;
+
+  setTimeout(nextQuestion, 1500);
+}
+
+function startGame() {
+  const fname = document.getElementById('fname').value.trim();
+  const lname = document.getElementById('lname').value.trim();
+  const className = document.getElementById('class').value.trim();
+  const number = document.getElementById('number').value.trim();
+
+  if (!fname || !lname || !className || !number) {
+    alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+    return;
+  }
+
+  document.getElementById('userForm').classList.add('hidden');
+  document.getElementById('gameArea').classList.remove('hidden');
+
+  // เริ่มเกม
+  score = 0;
+  currentQuestion = 0;
+  totalTime = 0;
+  nextQuestion();
+}
+
+function endGame() {
+  const fname = document.getElementById('fname').value.trim();
+  const lname = document.getElementById('lname').value.trim();
+  const className = document.getElementById('class').value.trim();
+  const number = document.getElementById('number').value.trim();
+
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td>${fname}</td>
+    <td>${lname}</td>
+    <td>${className}</td>
+    <td>${number}</td>
+    <td>${score}/${questionCount}</td>
+    <td>${totalTime} วินาที</td>
+  `;
+  resultTable.appendChild(row);
+
+  alert(`จบเกม! คุณได้ ${score} คะแนน จาก ${questionCount} ข้อ`);
+
+  document.getElementById('gameArea').classList.add('hidden');
+  document.getElementById('userForm').classList.remove('hidden');
+}
+</script>
+
+</body>
+</html>
+
